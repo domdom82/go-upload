@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-const maxSize = 10 << 20  // 10M
-const bufSize = 100 << 10 // 100K
+const maxSize = 100 << 20 // 100M
+const bufSize = 1 << 20   // 1M
 
 func main() {
 	mux := http.NewServeMux()
@@ -17,18 +17,24 @@ func main() {
 			return
 		}
 		if request.ContentLength > maxSize {
-			http.Error(writer, "file too large. 10M limit.", http.StatusExpectationFailed)
+			http.Error(writer, "file too large. 100M limit.", http.StatusExpectationFailed)
 			return
 		}
 		reader := http.MaxBytesReader(writer, request.Body, maxSize)
 		buf := make([]byte, bufSize)
+		bytesRead := int64(0)
 
 		for {
 			n, err := reader.Read(buf)
 			fmt.Printf("Read %d bytes\n", n)
 
 			if n > 0 {
-				nn, err := writer.Write([]byte(fmt.Sprintf("Read %d bytes\n", n)))
+				bytesRead += int64(n)
+				percentFinished := (float64(bytesRead) / float64(request.ContentLength)) * 100.0
+				nn, err := writer.Write([]byte(fmt.Sprintf("Read %d bytes (%.1f%%)\n", n, percentFinished)))
+				if f, ok := writer.(http.Flusher); ok {
+					f.Flush()
+				}
 				fmt.Printf("Wrote %d bytes\n", nn)
 
 				if err != nil {
